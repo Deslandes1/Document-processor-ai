@@ -11,6 +11,9 @@ from datetime import datetime
 from gtts import gTTS
 from typing import Optional
 
+# ========== DIAGNOSTIC – REMOVE AFTER TESTING ==========
+st.write("Anthropic key exists:", bool(st.secrets.get("ANTHROPIC_API_KEY")))
+
 # ========== PAGE CONFIG ==========
 st.set_page_config(
     page_title="Document Processor AI | GlobalInternet.py",
@@ -342,7 +345,7 @@ with col_title:
 with col_pic:
     try:
         st.image("https://raw.githubusercontent.com/Deslandes1/Document-processor-ai/main/Gesner%20Deslandes.png", width=100)
-        st.caption("Gesner Deslandes")  # <-- Added your name here
+        st.caption("Gesner Deslandes")
     except:
         pass
 st.markdown("---")
