@@ -7,29 +7,206 @@ import docx
 import io
 import tempfile
 import os
+import asyncio
+import edge_tts
 from datetime import datetime
 from typing import Optional
 
-# ========== CONFIGURATION ==========
-# Replace these with your own keys (use Streamlit secrets in production)
+# ========== PAGE CONFIG ==========
+st.set_page_config(
+    page_title="Document Processor AI | GlobalInternet.py",
+    page_icon="📄",
+    layout="wide"
+)
+
+# ========== LIGHT BLUE THEME CSS ==========
+st.markdown("""
+<style>
+    .stApp {
+        background: linear-gradient(135deg, #e0f0ff 0%, #b8d9ff 100%);
+        color: #1a2a3a;
+    }
+    [data-testid="stSidebar"] {
+        background-color: #cce4ff !important;
+    }
+    .stButton>button {
+        background-color: #2c7be5;
+        color: white;
+        border-radius: 30px;
+        font-weight: bold;
+        width: 100%;
+    }
+    .stButton>button:hover {
+        background-color: #1a5bbf;
+    }
+    .big-title {
+        font-size: 2.5rem;
+        font-weight: bold;
+        color: #1e3c72;
+        margin: 0;
+    }
+    .stTextInput>div>div>input, .stTextArea>div>div>textarea {
+        background-color: white;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# ========== LANGUAGE DICTIONARIES ==========
+TEXTS = {
+    "English": {
+        "welcome": "🔐 Welcome to Document Processor AI",
+        "sign_in_prompt": "Sign in or create an account to start processing your documents.",
+        "email": "Email",
+        "password": "Password",
+        "action": "Action",
+        "login": "Login",
+        "sign_up": "Sign Up",
+        "continue_btn": "Continue",
+        "logout": "🚪 Logout",
+        "premium_btn": "💎 Premium Features (Stripe)",
+        "instructions_title": "📌 Instructions",
+        "step1": "1. Upload a document (PDF, DOCX, TXT)",
+        "step2": "2. Choose an operation (Summarize, Extract, QA)",
+        "step3": "3. View AI results and save them to the cloud.",
+        "step4": "4. Upgrade to premium for advanced features (coming soon).",
+        "main_title": "📄 AI Document Processor",
+        "main_subtitle": "Upload your document, let AI process it, and store the results securely.",
+        "upload_label": "Choose a document",
+        "operation_label": "What would you like to do?",
+        "summarize": "Summarize",
+        "extract": "Extract Key Information",
+        "answer": "Answer a Question",
+        "question_label": "Your question about the document:",
+        "process_btn": "Process Document",
+        "extracting": "Extracting text...",
+        "sending_ai": "Sending to Anthropic AI...",
+        "success": "Processing complete!",
+        "preview_title": "Document Preview",
+        "ai_result_title": "AI Result",
+        "save_success": "Document saved to cloud (Supabase).",
+        "save_error": "Failed to save to Supabase. Check your credentials.",
+        "view_docs_btn": "📂 View My Processed Documents",
+        "no_docs": "No documents found.",
+        "footer": "© 2026 Document Processor AI – Built with Streamlit, Anthropic Claude, Supabase, and Stripe",
+        "explain_btn": "🎙️ AI Voice Explanation (Female)",
+        "explain_text": "Hello, I am the AI assistant of Document Processor AI. This software allows you to upload documents (PDF, DOCX, TXT), then uses Anthropic Claude AI to summarize, extract key information, or answer questions based on the content. Results are stored in Supabase cloud database. You can also upgrade to premium features using Stripe. This tool was built by Gesner Deslandes, Engineer‑in‑Chief at GlobalInternet.py. Enjoy!"
+    },
+    "French": {
+        "welcome": "🔐 Bienvenue dans Document Processor AI",
+        "sign_in_prompt": "Connectez-vous ou créez un compte pour traiter vos documents.",
+        "email": "Email",
+        "password": "Mot de passe",
+        "action": "Action",
+        "login": "Connexion",
+        "sign_up": "Inscription",
+        "continue_btn": "Continuer",
+        "logout": "🚪 Déconnexion",
+        "premium_btn": "💎 Fonctionnalités Premium (Stripe)",
+        "instructions_title": "📌 Instructions",
+        "step1": "1. Téléchargez un document (PDF, DOCX, TXT)",
+        "step2": "2. Choisissez une opération (Résumer, Extraire, Q/R)",
+        "step3": "3. Visualisez les résultats IA et enregistrez-les dans le cloud.",
+        "step4": "4. Passez à la version premium pour plus de fonctionnalités (bientôt).",
+        "main_title": "📄 Processeur de documents IA",
+        "main_subtitle": "Téléchargez votre document, laissez l'IA le traiter et stockez les résultats en toute sécurité.",
+        "upload_label": "Choisissez un document",
+        "operation_label": "Que souhaitez-vous faire ?",
+        "summarize": "Résumer",
+        "extract": "Extraire les informations clés",
+        "answer": "Répondre à une question",
+        "question_label": "Votre question sur le document :",
+        "process_btn": "Traiter le document",
+        "extracting": "Extraction du texte...",
+        "sending_ai": "Envoi à l'IA Anthropic...",
+        "success": "Traitement terminé !",
+        "preview_title": "Aperçu du document",
+        "ai_result_title": "Résultat IA",
+        "save_success": "Document enregistré dans le cloud (Supabase).",
+        "save_error": "Échec de l'enregistrement dans Supabase. Vérifiez vos identifiants.",
+        "view_docs_btn": "📂 Voir mes documents traités",
+        "no_docs": "Aucun document trouvé.",
+        "footer": "© 2026 Document Processor AI – Construit avec Streamlit, Anthropic Claude, Supabase et Stripe",
+        "explain_btn": "🎙️ Explication vocale IA (femme)",
+        "explain_text": "Bonjour, je suis l'assistant IA de Document Processor AI. Ce logiciel vous permet de télécharger des documents (PDF, DOCX, TXT), puis utilise l'IA Anthropic Claude pour résumer, extraire des informations clés ou répondre à des questions basées sur le contenu. Les résultats sont stockés dans la base de données cloud Supabase. Vous pouvez également passer à la version premium avec Stripe. Cet outil a été créé par Gesner Deslandes, ingénieur en chef chez GlobalInternet.py. Profitez-en !"
+    },
+    "Spanish": {
+        "welcome": "🔐 Bienvenido a Document Processor AI",
+        "sign_in_prompt": "Inicie sesión o cree una cuenta para procesar sus documentos.",
+        "email": "Correo electrónico",
+        "password": "Contraseña",
+        "action": "Acción",
+        "login": "Iniciar sesión",
+        "sign_up": "Registrarse",
+        "continue_btn": "Continuar",
+        "logout": "🚪 Cerrar sesión",
+        "premium_btn": "💎 Funcionalidades Premium (Stripe)",
+        "instructions_title": "📌 Instrucciones",
+        "step1": "1. Suba un documento (PDF, DOCX, TXT)",
+        "step2": "2. Elija una operación (Resumir, Extraer, Preguntas)",
+        "step3": "3. Vea los resultados de IA y guárdelos en la nube.",
+        "step4": "4. Actualice a premium para funciones avanzadas (próximamente).",
+        "main_title": "📄 Procesador de documentos IA",
+        "main_subtitle": "Suba su documento, deje que la IA lo procese y almacene los resultados de forma segura.",
+        "upload_label": "Elija un documento",
+        "operation_label": "¿Qué desea hacer?",
+        "summarize": "Resumir",
+        "extract": "Extraer información clave",
+        "answer": "Responder una pregunta",
+        "question_label": "Su pregunta sobre el documento:",
+        "process_btn": "Procesar documento",
+        "extracting": "Extrayendo texto...",
+        "sending_ai": "Enviando a IA Anthropic...",
+        "success": "¡Procesamiento completo!",
+        "preview_title": "Vista previa del documento",
+        "ai_result_title": "Resultado IA",
+        "save_success": "Documento guardado en la nube (Supabase).",
+        "save_error": "Error al guardar en Supabase. Verifique sus credenciales.",
+        "view_docs_btn": "📂 Ver mis documentos procesados",
+        "no_docs": "No se encontraron documentos.",
+        "footer": "© 2026 Document Processor AI – Construido con Streamlit, Anthropic Claude, Supabase y Stripe",
+        "explain_btn": "🎙️ Explicación por voz IA (mujer)",
+        "explain_text": "Hola, soy el asistente IA de Document Processor AI. Este software le permite subir documentos (PDF, DOCX, TXT) y luego usa IA Anthropic Claude para resumir, extraer información clave o responder preguntas basadas en el contenido. Los resultados se almacenan en la base de datos en la nube Supabase. También puede actualizar a funciones premium usando Stripe. Esta herramienta fue construida por Gesner Deslandes, ingeniero jefe de GlobalInternet.py. ¡Disfrútela!"
+    }
+}
+
+# ========== VOICE MAPPING ==========
+VOICE_MAP = {
+    "English": "en-US-JennyNeural",
+    "French": "fr-FR-DeniseNeural",
+    "Spanish": "es-ES-ElviraNeural"
+}
+
+async def text_to_speech(text, voice, output_path):
+    comm = edge_tts.Communicate(text, voice)
+    await comm.save(output_path)
+
+def generate_audio(text, lang):
+    voice = VOICE_MAP.get(lang, "en-US-JennyNeural")
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp:
+        tmp_path = tmp.name
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(text_to_speech(text, voice, tmp_path))
+    loop.close()
+    with open(tmp_path, "rb") as f:
+        audio_bytes = f.read()
+    os.unlink(tmp_path)
+    return audio_bytes
+
+# ========== CONFIGURATION (from secrets) ==========
 ANTHROPIC_API_KEY = st.secrets.get("ANTHROPIC_API_KEY", "your-key-here")
 SUPABASE_URL = st.secrets.get("SUPABASE_URL", "https://your-project.supabase.co")
 SUPABASE_KEY = st.secrets.get("SUPABASE_KEY", "your-anon-key")
 STRIPE_SECRET_KEY = st.secrets.get("STRIPE_SECRET_KEY", "sk_test_...")
 STRIPE_PUBLISHABLE_KEY = st.secrets.get("STRIPE_PUBLISHABLE_KEY", "pk_test_...")
 
-# Initialize clients
-anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-supabase_client = supabase.create_client(SUPABASE_URL, SUPABASE_KEY)
-stripe.api_key = STRIPE_SECRET_KEY
-
-# ========== PAGE CONFIG ==========
-st.set_page_config(
-    page_title="Document Processor AI",
-    page_icon="📄",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# Initialize clients (only if keys are not dummy)
+if ANTHROPIC_API_KEY != "your-key-here":
+    anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+if SUPABASE_URL != "https://your-project.supabase.co":
+    supabase_client = supabase.create_client(SUPABASE_URL, SUPABASE_KEY)
+if STRIPE_SECRET_KEY != "sk_test_...":
+    stripe.api_key = STRIPE_SECRET_KEY
 
 # ========== SESSION STATE ==========
 if "user_id" not in st.session_state:
@@ -38,10 +215,11 @@ if "processed_docs" not in st.session_state:
     st.session_state.processed_docs = []
 if "payment_success" not in st.session_state:
     st.session_state.payment_success = False
+if "lang" not in st.session_state:
+    st.session_state.lang = "English"
 
 # ========== HELPER FUNCTIONS ==========
 def extract_text_from_file(uploaded_file):
-    """Extract text from PDF, DOCX, or TXT file."""
     file_type = uploaded_file.type
     if file_type == "text/plain":
         return uploaded_file.read().decode("utf-8")
@@ -57,14 +235,13 @@ def extract_text_from_file(uploaded_file):
     else:
         return ""
 
-def process_with_anthropic(text: str, operation: str) -> str:
-    """Send text to Anthropic Claude for processing."""
+def process_with_anthropic(text: str, operation: str, question: str = None) -> str:
     prompts = {
         "summarize": "Please summarize the following document in a few concise paragraphs:\n\n",
         "extract_key_info": "Extract the most important information from this document (key facts, dates, names, decisions):\n\n",
-        "answer_question": "Answer the question based on the document.\n\nDocument:\n"
+        "answer_question": f"Answer the question based on the document.\n\nDocument:\n{text}\n\nQuestion: {question}"
     }
-    prompt = prompts.get(operation, "Please process this document:\n\n") + text
+    prompt = prompts.get(operation, "Please process this document:\n\n") + (text if operation != "answer_question" else "")
     try:
         response = anthropic_client.messages.create(
             model="claude-3-haiku-20240307",
@@ -76,12 +253,11 @@ def process_with_anthropic(text: str, operation: str) -> str:
         return f"AI error: {str(e)}"
 
 def save_to_supabase(user_id: str, filename: str, original_text: str, processed_summary: str, extracted_info: str):
-    """Store document and AI results in Supabase."""
     try:
         data = {
             "user_id": user_id,
             "filename": filename,
-            "original_text": original_text[:5000],  # limit to avoid row size issues
+            "original_text": original_text[:5000],
             "summary": processed_summary,
             "extracted_info": extracted_info,
             "created_at": datetime.now().isoformat()
@@ -93,7 +269,6 @@ def save_to_supabase(user_id: str, filename: str, original_text: str, processed_
         return False
 
 def create_stripe_checkout():
-    """Create a Stripe Checkout session for premium features."""
     try:
         session = stripe.checkout.Session.create(
             payment_method_types=["card"],
@@ -101,7 +276,7 @@ def create_stripe_checkout():
                 "price_data": {
                     "currency": "usd",
                     "product_data": {"name": "Premium Document Processing"},
-                    "unit_amount": 999,  # $9.99
+                    "unit_amount": 999,
                 },
                 "quantity": 1,
             }],
@@ -114,106 +289,124 @@ def create_stripe_checkout():
         st.error(f"Stripe error: {e}")
         return None
 
-# ========== LOGIN / SIGNUP (Mock) ==========
-def login_ui():
-    st.title("🔐 Welcome to Document Processor AI")
-    st.markdown("Sign in or create an account to start processing your documents.")
+# ========== LOGIN UI ==========
+def login_ui(texts):
+    st.title(texts["welcome"])
+    st.markdown(texts["sign_in_prompt"])
     with st.form("auth_form"):
-        email = st.text_input("Email")
-        password = st.text_input("Password", type="password")
-        action = st.selectbox("Action", ["Login", "Sign Up"])
-        submitted = st.form_submit_button("Continue")
+        email = st.text_input(texts["email"])
+        password = st.text_input(texts["password"], type="password")
+        action = st.selectbox(texts["action"], [texts["login"], texts["sign_up"]])
+        submitted = st.form_submit_button(texts["continue_btn"])
         if submitted:
-            if action == "Sign Up":
-                # In production, you would use Supabase Auth.
-                # For demo, we create a mock user ID.
+            if action == texts["sign_up"]:
                 st.session_state.user_id = email
                 st.success("Account created! You are now logged in.")
                 st.rerun()
             else:
-                # Mock login – accept any email/password
                 st.session_state.user_id = email
                 st.success("Logged in successfully!")
                 st.rerun()
     st.stop()
 
-# ========== MAIN APP ==========
-if st.session_state.user_id is None:
-    login_ui()
+# ========== SIDEBAR ==========
+# Language selector
+lang = st.sidebar.selectbox("🌐 Language", ["English", "French", "Spanish"], index=["English","French","Spanish"].index(st.session_state.lang))
+if lang != st.session_state.lang:
+    st.session_state.lang = lang
+    st.rerun()
+texts = TEXTS[st.session_state.lang]
 
-# Sidebar user info
 with st.sidebar:
     st.image("https://img.icons8.com/fluency/96/null/document.png", width=80)
-    st.markdown(f"**User:** {st.session_state.user_id}")
-    if st.button("🚪 Logout"):
-        st.session_state.user_id = None
-        st.rerun()
+    if st.session_state.user_id:
+        st.markdown(f"**User:** {st.session_state.user_id}")
+        if st.button(texts["logout"], use_container_width=True):
+            st.session_state.user_id = None
+            st.rerun()
+        st.markdown("---")
+        if st.button(texts["premium_btn"], use_container_width=True):
+            url = create_stripe_checkout()
+            if url:
+                st.markdown(f"[Click to pay $9.99]({url})")
+            else:
+                st.error("Could not create checkout session.")
     st.markdown("---")
-    if st.button("💎 Premium Features (Stripe)", use_container_width=True):
-        url = create_stripe_checkout()
-        if url:
-            st.markdown(f"[Click to pay $9.99]({url})")
-        else:
-            st.error("Could not create checkout session.")
+    st.markdown(f"### {texts['instructions_title']}")
+    st.markdown(texts["step1"])
+    st.markdown(texts["step2"])
+    st.markdown(texts["step3"])
+    st.markdown(texts["step4"])
     st.markdown("---")
-    st.markdown("### 📌 Instructions")
-    st.markdown("1. Upload a document (PDF, DOCX, TXT)")
-    st.markdown("2. Choose an operation (Summarize, Extract, QA)")
-    st.markdown("3. View AI results and save them to the cloud.")
-    st.markdown("4. Upgrade to premium for advanced features (coming soon).")
+    if st.button(texts["explain_btn"], use_container_width=True):
+        with st.spinner("Generating voice explanation..."):
+            audio_bytes = generate_audio(texts["explain_text"], st.session_state.lang)
+            st.audio(audio_bytes, format="audio/mp3")
+            st.success("Explanation played. Click again to repeat.")
 
-st.title("📄 AI Document Processor")
-st.markdown("Upload your document, let AI process it, and store the results securely.")
+# ========== MAIN CONTENT ==========
+# Title with profile picture
+col_title, col_pic = st.columns([4, 1])
+with col_title:
+    st.markdown('<div class="big-title">DOCUMENT PROCESSOR AI</div>', unsafe_allow_html=True)
+    st.markdown(f"*{texts['main_subtitle']}*")
+with col_pic:
+    try:
+        st.image("https://raw.githubusercontent.com/Deslandes1/Document-processor-ai/main/Gesner%20Deslandes.png", width=100)
+    except:
+        pass
+st.markdown("---")
 
-# Document upload
-uploaded_file = st.file_uploader("Choose a document", type=["pdf", "docx", "txt"])
-operation = st.selectbox("What would you like to do?", ["Summarize", "Extract Key Information", "Answer a Question"])
+# If not logged in, show login screen
+if st.session_state.user_id is None:
+    login_ui(texts)
+
+# Otherwise, show the main document processor
+st.markdown(f"## {texts['main_title']}")
+st.markdown(texts["main_subtitle"])
+
+uploaded_file = st.file_uploader(texts["upload_label"], type=["pdf", "docx", "txt"])
+operation = st.selectbox(texts["operation_label"], [texts["summarize"], texts["extract"], texts["answer"]])
 question = None
-if operation == "Answer a Question":
-    question = st.text_input("Your question about the document:")
+if operation == texts["answer"]:
+    question = st.text_input(texts["question_label"])
 
-if uploaded_file is not None and st.button("Process Document", type="primary"):
-    with st.spinner("Extracting text..."):
+if uploaded_file is not None and st.button(texts["process_btn"], type="primary"):
+    with st.spinner(texts["extracting"]):
         text = extract_text_from_file(uploaded_file)
         if not text:
             st.error("Could not extract text from the file.")
         else:
-            with st.spinner("Sending to Anthropic AI..."):
-                if operation == "Summarize":
+            with st.spinner(texts["sending_ai"]):
+                if operation == texts["summarize"]:
                     result = process_with_anthropic(text, "summarize")
                     summary = result
                     extracted_info = ""
-                elif operation == "Extract Key Information":
+                elif operation == texts["extract"]:
                     result = process_with_anthropic(text, "extract_key_info")
                     summary = ""
                     extracted_info = result
-                else:  # Answer question
+                else:  # answer question
                     if not question:
                         st.warning("Please enter a question.")
                         st.stop()
-                    prompt = f"Answer the question based on the document.\n\nDocument:\n{text}\n\nQuestion: {question}"
-                    result = process_with_anthropic(prompt, "answer_question")
+                    result = process_with_anthropic(text, "answer_question", question=question)
                     summary = ""
                     extracted_info = result
-                
-                # Display results
-                st.success("Processing complete!")
+                st.success(texts["success"])
                 col1, col2 = st.columns(2)
                 with col1:
-                    st.subheader("Document Preview")
-                    st.text_area("First 1000 characters:", text[:1000], height=200)
+                    st.subheader(texts["preview_title"])
+                    st.text_area("", text[:1000], height=200)
                 with col2:
-                    st.subheader("AI Result")
+                    st.subheader(texts["ai_result_title"])
                     st.markdown(result)
-                
-                # Save to Supabase
                 if save_to_supabase(st.session_state.user_id, uploaded_file.name, text[:5000], summary, extracted_info):
-                    st.success("Document saved to cloud (Supabase).")
+                    st.success(texts["save_success"])
                 else:
-                    st.error("Failed to save to Supabase. Check your credentials.")
+                    st.error(texts["save_error"])
 
-# Show previously processed documents (optional)
-if st.button("📂 View My Processed Documents"):
+if st.button(texts["view_docs_btn"]):
     try:
         response = supabase_client.table("documents").select("*").eq("user_id", st.session_state.user_id).order("created_at", desc=True).execute()
         docs = response.data
@@ -223,9 +416,9 @@ if st.button("📂 View My Processed Documents"):
                     st.write(f"**Summary:** {doc['summary'][:300] if doc['summary'] else 'N/A'}")
                     st.write(f"**Extracted Info:** {doc['extracted_info'][:300] if doc['extracted_info'] else 'N/A'}")
         else:
-            st.info("No documents found.")
+            st.info(texts["no_docs"])
     except Exception as e:
         st.error(f"Could not fetch documents: {e}")
 
 st.markdown("---")
-st.caption("© 2026 Document Processor AI – Built with Streamlit, Anthropic Claude, Supabase, and Stripe")
+st.caption(texts["footer"])
