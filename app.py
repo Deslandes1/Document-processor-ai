@@ -195,8 +195,16 @@ SUPABASE_KEY = st.secrets.get("SUPABASE_KEY", "your-anon-key")
 STRIPE_SECRET_KEY = st.secrets.get("STRIPE_SECRET_KEY", "sk_test_...")
 STRIPE_PUBLISHABLE_KEY = st.secrets.get("STRIPE_PUBLISHABLE_KEY", "pk_test_...")
 
+# Initialize clients only if key is valid (mock otherwise)
 if ANTHROPIC_API_KEY != "your-key-here":
-    anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    try:
+        anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        # Test key quickly (optional)
+    except:
+        anthropic_client = None
+else:
+    anthropic_client = None
+
 if SUPABASE_URL != "https://your-project.supabase.co":
     supabase_client = supabase.create_client(SUPABASE_URL, SUPABASE_KEY)
 if STRIPE_SECRET_KEY != "sk_test_...":
@@ -230,6 +238,10 @@ def extract_text_from_file(uploaded_file):
         return ""
 
 def process_with_anthropic(text: str, operation: str, question: str = None) -> str:
+    # Mock fallback if key missing or invalid
+    if not ANTHROPIC_API_KEY or ANTHROPIC_API_KEY == "your-key-here" or anthropic_client is None:
+        return f"[Mock AI – waiting for valid API key]\n\nYour document starts with: {text[:400]}...\n\nRequested operation: {operation}\nQuestion: {question if question else 'N/A'}\n\nTo get real AI responses, please add a valid Anthropic API key to Streamlit secrets."
+    
     prompts = {
         "summarize": "Please summarize the following document in a few concise paragraphs:\n\n",
         "extract_key_info": "Extract the most important information from this document (key facts, dates, names, decisions):\n\n",
@@ -244,7 +256,7 @@ def process_with_anthropic(text: str, operation: str, question: str = None) -> s
         )
         return response.content[0].text
     except Exception as e:
-        return f"AI error: {str(e)}"
+        return f"[Mock AI – API error: {str(e)}]\n\nYour document starts with: {text[:400]}...\n\nPlease check your API key."
 
 def save_to_supabase(user_id: str, filename: str, original_text: str, processed_summary: str, extracted_info: str):
     try:
