@@ -7,9 +7,8 @@ import docx
 import io
 import tempfile
 import os
-import asyncio
-import edge_tts
 from datetime import datetime
+from gtts import gTTS
 from typing import Optional
 
 # ========== PAGE CONFIG ==========
@@ -169,25 +168,19 @@ TEXTS = {
     }
 }
 
-# ========== VOICE MAPPING ==========
-VOICE_MAP = {
-    "English": "en-US-JennyNeural",
-    "French": "fr-FR-DeniseNeural",
-    "Spanish": "es-ES-ElviraNeural"
-}
-
-async def text_to_speech(text, voice, output_path):
-    comm = edge_tts.Communicate(text, voice)
-    await comm.save(output_path)
-
+# ========== VOICE GENERATION WITH gTTS ==========
 def generate_audio(text, lang):
-    voice = VOICE_MAP.get(lang, "en-US-JennyNeural")
+    # Map language names to gTTS language codes
+    lang_map = {
+        "English": "en",
+        "French": "fr",
+        "Spanish": "es"
+    }
+    lang_code = lang_map.get(lang, "en")
     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp:
         tmp_path = tmp.name
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(text_to_speech(text, voice, tmp_path))
-    loop.close()
+    tts = gTTS(text=text, lang=lang_code, slow=False)
+    tts.save(tmp_path)
     with open(tmp_path, "rb") as f:
         audio_bytes = f.read()
     os.unlink(tmp_path)
