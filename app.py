@@ -11,15 +11,15 @@ from datetime import datetime
 from gtts import gTTS
 from typing import Optional
 
-# ========== DIAGNOSTIC – REMOVE AFTER TESTING ==========
-st.write("Anthropic key exists:", bool(st.secrets.get("ANTHROPIC_API_KEY")))
-
-# ========== PAGE CONFIG ==========
+# ========== PAGE CONFIG (MUST BE FIRST) ==========
 st.set_page_config(
     page_title="Document Processor AI | GlobalInternet.py",
     page_icon="📄",
     layout="wide"
 )
+
+# ========== DIAGNOSTIC – REMOVE AFTER TESTING ==========
+st.write("Anthropic key exists:", bool(st.secrets.get("ANTHROPIC_API_KEY")))
 
 # ========== LIGHT BLUE THEME CSS ==========
 st.markdown("""
