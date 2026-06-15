@@ -170,7 +170,6 @@ TEXTS = {
 
 # ========== VOICE GENERATION WITH gTTS ==========
 def generate_audio(text, lang):
-    # Map language names to gTTS language codes
     lang_map = {
         "English": "en",
         "French": "fr",
@@ -193,7 +192,6 @@ SUPABASE_KEY = st.secrets.get("SUPABASE_KEY", "your-anon-key")
 STRIPE_SECRET_KEY = st.secrets.get("STRIPE_SECRET_KEY", "sk_test_...")
 STRIPE_PUBLISHABLE_KEY = st.secrets.get("STRIPE_PUBLISHABLE_KEY", "pk_test_...")
 
-# Initialize clients (only if keys are not dummy)
 if ANTHROPIC_API_KEY != "your-key-here":
     anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 if SUPABASE_URL != "https://your-project.supabase.co":
@@ -303,7 +301,6 @@ def login_ui(texts):
     st.stop()
 
 # ========== SIDEBAR ==========
-# Language selector
 lang = st.sidebar.selectbox("🌐 Language", ["English", "French", "Spanish"], index=["English","French","Spanish"].index(st.session_state.lang))
 if lang != st.session_state.lang:
     st.session_state.lang = lang
@@ -338,7 +335,6 @@ with st.sidebar:
             st.success("Explanation played. Click again to repeat.")
 
 # ========== MAIN CONTENT ==========
-# Title with profile picture
 col_title, col_pic = st.columns([4, 1])
 with col_title:
     st.markdown('<div class="big-title">DOCUMENT PROCESSOR AI</div>', unsafe_allow_html=True)
@@ -346,15 +342,14 @@ with col_title:
 with col_pic:
     try:
         st.image("https://raw.githubusercontent.com/Deslandes1/Document-processor-ai/main/Gesner%20Deslandes.png", width=100)
+        st.caption("Gesner Deslandes")  # <-- Added your name here
     except:
         pass
 st.markdown("---")
 
-# If not logged in, show login screen
 if st.session_state.user_id is None:
     login_ui(texts)
 
-# Otherwise, show the main document processor
 st.markdown(f"## {texts['main_title']}")
 st.markdown(texts["main_subtitle"])
 
@@ -379,7 +374,7 @@ if uploaded_file is not None and st.button(texts["process_btn"], type="primary")
                     result = process_with_anthropic(text, "extract_key_info")
                     summary = ""
                     extracted_info = result
-                else:  # answer question
+                else:
                     if not question:
                         st.warning("Please enter a question.")
                         st.stop()
