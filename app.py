@@ -102,6 +102,7 @@ TEXTS = {
         "success": "Processing complete!",
         "preview_title": "Document Preview",
         "ai_result_title": "AI Result",
+        "read_result_btn": "🔊 Read Result Aloud",
         "save_success": "Document saved to cloud (Supabase).",
         "save_error": "Failed to save to Supabase. Check your credentials.",
         "view_docs_btn": "📂 View My Processed Documents",
@@ -140,6 +141,7 @@ TEXTS = {
         "success": "Traitement terminé !",
         "preview_title": "Aperçu du document",
         "ai_result_title": "Résultat IA",
+        "read_result_btn": "🔊 Lire le résultat à voix haute",
         "save_success": "Document enregistré dans le cloud (Supabase).",
         "save_error": "Échec de l'enregistrement dans Supabase. Vérifiez vos identifiants.",
         "view_docs_btn": "📂 Voir mes documents traités",
@@ -178,6 +180,7 @@ TEXTS = {
         "success": "¡Procesamiento completo!",
         "preview_title": "Vista previa del documento",
         "ai_result_title": "Resultado IA",
+        "read_result_btn": "🔊 Leer resultado en voz alta",
         "save_success": "Documento guardado en la nube (Supabase).",
         "save_error": "Error al guardar en Supabase. Verifique sus credenciales.",
         "view_docs_btn": "📂 Ver mis documentos procesados",
@@ -441,6 +444,11 @@ if uploaded_file is not None and st.button(texts["process_btn"], type="primary")
                 with col2:
                     st.subheader(texts["ai_result_title"])
                     st.markdown(result)
+                    # New button to read the result aloud
+                    if st.button(texts["read_result_btn"], key="read_result"):
+                        with st.spinner("Generating speech..."):
+                            audio_bytes = generate_audio(result, st.session_state.lang)
+                            st.audio(audio_bytes, format="audio/mp3")
                 if save_to_supabase(st.session_state.user_id, uploaded_file.name, text[:5000], summary, extracted_info):
                     st.success(texts["save_success"])
                 else:
