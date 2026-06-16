@@ -18,8 +18,11 @@ st.set_page_config(
     layout="wide"
 )
 
-# ========== DIAGNOSTIC – REMOVE AFTER TESTING ==========
-st.write("Anthropic key exists:", bool(st.secrets.get("ANTHROPIC_API_KEY")))
+# ========== DIAGNOSTIC – SHOW KEY PREFIX ==========
+key = st.secrets.get("ANTHROPIC_API_KEY", "")
+st.write("Anthropic key exists:", bool(key))
+st.write("Key prefix (first 15 chars):", key[:15] if key else "None")
+st.markdown("---")
 
 # ========== LIGHT BLUE THEME CSS ==========
 st.markdown("""
@@ -189,19 +192,15 @@ def generate_audio(text, lang):
     return audio_bytes
 
 # ========== CONFIGURATION (from secrets) ==========
-ANTHROPIC_API_KEY = st.secrets.get("ANTHROPIC_API_KEY", "your-key-here")
+ANTHROPIC_API_KEY = st.secrets.get("ANTHROPIC_API_KEY", "").strip()  # strip spaces
 SUPABASE_URL = st.secrets.get("SUPABASE_URL", "https://your-project.supabase.co")
 SUPABASE_KEY = st.secrets.get("SUPABASE_KEY", "your-anon-key")
 STRIPE_SECRET_KEY = st.secrets.get("STRIPE_SECRET_KEY", "sk_test_...")
 STRIPE_PUBLISHABLE_KEY = st.secrets.get("STRIPE_PUBLISHABLE_KEY", "pk_test_...")
 
-# Initialize clients only if key is valid (mock otherwise)
-if ANTHROPIC_API_KEY != "your-key-here":
-    try:
-        anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-        # Test key quickly (optional)
-    except:
-        anthropic_client = None
+# Initialize Anthropic client only if key looks valid
+if ANTHROPIC_API_KEY and ANTHROPIC_API_KEY.startswith("sk-ant-api03-"):
+    anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 else:
     anthropic_client = None
 
@@ -238,9 +237,9 @@ def extract_text_from_file(uploaded_file):
         return ""
 
 def process_with_anthropic(text: str, operation: str, question: str = None) -> str:
-    # Mock fallback if key missing or invalid
-    if not ANTHROPIC_API_KEY or ANTHROPIC_API_KEY == "your-key-here" or anthropic_client is None:
-        return f"[Mock AI – waiting for valid API key]\n\nYour document starts with: {text[:400]}...\n\nRequested operation: {operation}\nQuestion: {question if question else 'N/A'}\n\nTo get real AI responses, please add a valid Anthropic API key to Streamlit secrets."
+    # If no valid client, return mock response
+    if anthropic_client is None:
+        return f"[Mock AI – Valid Anthropic API key not found]\n\nYour document starts with: {text[:400]}...\n\nRequested operation: {operation}\nQuestion: {question if question else 'N/A'}\n\nTo enable real AI, add a valid Anthropic API key (starting with sk-ant-api03-) to Streamlit secrets."
     
     prompts = {
         "summarize": "Please summarize the following document in a few concise paragraphs:\n\n",
@@ -255,6 +254,8 @@ def process_with_anthropic(text: str, operation: str, question: str = None) -> s
             messages=[{"role": "user", "content": prompt}]
         )
         return response.content[0].text
+    except anthropic.AuthenticationError as e:
+        return f"[Mock AI – Authentication failed: {str(e)}]\n\nYour document starts with: {text[:400]}...\n\nPlease check that your API key is correct and active."
     except Exception as e:
         return f"[Mock AI – API error: {str(e)}]\n\nYour document starts with: {text[:400]}...\n\nPlease check your API key."
 
