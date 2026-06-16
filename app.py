@@ -1,15 +1,13 @@
 import streamlit as st
-import anthropic
 import supabase
 import stripe
 import PyPDF2
 import docx
-import io
 import tempfile
 import os
 from datetime import datetime
 from gtts import gTTS
-from typing import Optional
+from google import genai
 
 # ========== PAGE CONFIG (MUST BE FIRST) ==========
 st.set_page_config(
@@ -18,9 +16,9 @@ st.set_page_config(
     layout="wide"
 )
 
-# ========== DIAGNOSTIC – SHOW KEY PREFIX ==========
+# ========== DIAGNOSTIC – REMOVE AFTER TESTING ==========
 key = st.secrets.get("ANTHROPIC_API_KEY", "")
-st.write("Anthropic key exists:", bool(key))
+st.write("Gemini key exists:", bool(key))
 st.write("Key prefix (first 15 chars):", key[:15] if key else "None")
 st.markdown("---")
 
@@ -84,7 +82,7 @@ TEXTS = {
         "question_label": "Your question about the document:",
         "process_btn": "Process Document",
         "extracting": "Extracting text...",
-        "sending_ai": "Sending to Anthropic AI...",
+        "sending_ai": "Sending to Google Gemini AI...",
         "success": "Processing complete!",
         "preview_title": "Document Preview",
         "ai_result_title": "AI Result",
@@ -92,9 +90,9 @@ TEXTS = {
         "save_error": "Failed to save to Supabase. Check your credentials.",
         "view_docs_btn": "📂 View My Processed Documents",
         "no_docs": "No documents found.",
-        "footer": "© 2026 Document Processor AI – Built with Streamlit, Anthropic Claude, Supabase, and Stripe",
+        "footer": "© 2026 Document Processor AI – Built with Streamlit, Google Gemini, Supabase, and Stripe",
         "explain_btn": "🎙️ AI Voice Explanation (Female)",
-        "explain_text": "Hello, I am the AI assistant of Document Processor AI. This software allows you to upload documents (PDF, DOCX, TXT), then uses Anthropic Claude AI to summarize, extract key information, or answer questions based on the content. Results are stored in Supabase cloud database. You can also upgrade to premium features using Stripe. This tool was built by Gesner Deslandes, Engineer‑in‑Chief at GlobalInternet.py. Enjoy!"
+        "explain_text": "Hello, I am the AI assistant of Document Processor AI. This software allows you to upload documents (PDF, DOCX, TXT), then uses Google Gemini AI to summarize, extract key information, or answer questions based on the content. Results are stored in Supabase cloud database. You can also upgrade to premium features using Stripe. This tool was built by Gesner Deslandes, Engineer‑in‑Chief at GlobalInternet.py. Enjoy!"
     },
     "French": {
         "welcome": "🔐 Bienvenue dans Document Processor AI",
@@ -122,7 +120,7 @@ TEXTS = {
         "question_label": "Votre question sur le document :",
         "process_btn": "Traiter le document",
         "extracting": "Extraction du texte...",
-        "sending_ai": "Envoi à l'IA Anthropic...",
+        "sending_ai": "Envoi à l'IA Google Gemini...",
         "success": "Traitement terminé !",
         "preview_title": "Aperçu du document",
         "ai_result_title": "Résultat IA",
@@ -130,9 +128,9 @@ TEXTS = {
         "save_error": "Échec de l'enregistrement dans Supabase. Vérifiez vos identifiants.",
         "view_docs_btn": "📂 Voir mes documents traités",
         "no_docs": "Aucun document trouvé.",
-        "footer": "© 2026 Document Processor AI – Construit avec Streamlit, Anthropic Claude, Supabase et Stripe",
+        "footer": "© 2026 Document Processor AI – Construit avec Streamlit, Google Gemini, Supabase et Stripe",
         "explain_btn": "🎙️ Explication vocale IA (femme)",
-        "explain_text": "Bonjour, je suis l'assistant IA de Document Processor AI. Ce logiciel vous permet de télécharger des documents (PDF, DOCX, TXT), puis utilise l'IA Anthropic Claude pour résumer, extraire des informations clés ou répondre à des questions basées sur le contenu. Les résultats sont stockés dans la base de données cloud Supabase. Vous pouvez également passer à la version premium avec Stripe. Cet outil a été créé par Gesner Deslandes, ingénieur en chef chez GlobalInternet.py. Profitez-en !"
+        "explain_text": "Bonjour, je suis l'assistant IA de Document Processor AI. Ce logiciel vous permet de télécharger des documents (PDF, DOCX, TXT), puis utilise l'IA Google Gemini pour résumer, extraire des informations clés ou répondre à des questions basées sur le contenu. Les résultats sont stockés dans la base de données cloud Supabase. Vous pouvez également passer à la version premium avec Stripe. Cet outil a été créé par Gesner Deslandes, ingénieur en chef chez GlobalInternet.py. Profitez-en !"
     },
     "Spanish": {
         "welcome": "🔐 Bienvenido a Document Processor AI",
@@ -160,7 +158,7 @@ TEXTS = {
         "question_label": "Su pregunta sobre el documento:",
         "process_btn": "Procesar documento",
         "extracting": "Extrayendo texto...",
-        "sending_ai": "Enviando a IA Anthropic...",
+        "sending_ai": "Enviando a IA Google Gemini...",
         "success": "¡Procesamiento completo!",
         "preview_title": "Vista previa del documento",
         "ai_result_title": "Resultado IA",
@@ -168,9 +166,9 @@ TEXTS = {
         "save_error": "Error al guardar en Supabase. Verifique sus credenciales.",
         "view_docs_btn": "📂 Ver mis documentos procesados",
         "no_docs": "No se encontraron documentos.",
-        "footer": "© 2026 Document Processor AI – Construido con Streamlit, Anthropic Claude, Supabase y Stripe",
+        "footer": "© 2026 Document Processor AI – Construido con Streamlit, Google Gemini, Supabase y Stripe",
         "explain_btn": "🎙️ Explicación por voz IA (mujer)",
-        "explain_text": "Hola, soy el asistente IA de Document Processor AI. Este software le permite subir documentos (PDF, DOCX, TXT) y luego usa IA Anthropic Claude para resumir, extraer información clave o responder preguntas basadas en el contenido. Los resultados se almacenan en la base de datos en la nube Supabase. También puede actualizar a funciones premium usando Stripe. Esta herramienta fue construida por Gesner Deslandes, ingeniero jefe de GlobalInternet.py. ¡Disfrútela!"
+        "explain_text": "Hola, soy el asistente IA de Document Processor AI. Este software le permite subir documentos (PDF, DOCX, TXT) y luego usa IA Google Gemini para resumir, extraer información clave o responder preguntas basadas en el contenido. Los resultados se almacenan en la base de datos en la nube Supabase. También puede actualizar a funciones premium usando Stripe. Esta herramienta fue construida por Gesner Deslandes, ingeniero jefe de GlobalInternet.py. ¡Disfrútela!"
     }
 }
 
@@ -192,20 +190,17 @@ def generate_audio(text, lang):
     return audio_bytes
 
 # ========== CONFIGURATION (from secrets) ==========
-ANTHROPIC_API_KEY = st.secrets.get("ANTHROPIC_API_KEY", "").strip()  # strip spaces
+GEMINI_API_KEY = st.secrets.get("ANTHROPIC_API_KEY", "")  # reuse the same secret name
 SUPABASE_URL = st.secrets.get("SUPABASE_URL", "https://your-project.supabase.co")
 SUPABASE_KEY = st.secrets.get("SUPABASE_KEY", "your-anon-key")
 STRIPE_SECRET_KEY = st.secrets.get("STRIPE_SECRET_KEY", "sk_test_...")
 STRIPE_PUBLISHABLE_KEY = st.secrets.get("STRIPE_PUBLISHABLE_KEY", "pk_test_...")
 
-# Initialize Anthropic client only if key looks valid
-if ANTHROPIC_API_KEY and ANTHROPIC_API_KEY.startswith("sk-ant-api03-"):
-    anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-else:
-    anthropic_client = None
-
+# Initialize Supabase and Stripe if configured
 if SUPABASE_URL != "https://your-project.supabase.co":
     supabase_client = supabase.create_client(SUPABASE_URL, SUPABASE_KEY)
+else:
+    supabase_client = None
 if STRIPE_SECRET_KEY != "sk_test_...":
     stripe.api_key = STRIPE_SECRET_KEY
 
@@ -236,30 +231,37 @@ def extract_text_from_file(uploaded_file):
     else:
         return ""
 
-def process_with_anthropic(text: str, operation: str, question: str = None) -> str:
-    # If no valid client, return mock response
-    if anthropic_client is None:
-        return f"[Mock AI – Valid Anthropic API key not found]\n\nYour document starts with: {text[:400]}...\n\nRequested operation: {operation}\nQuestion: {question if question else 'N/A'}\n\nTo enable real AI, add a valid Anthropic API key (starting with sk-ant-api03-) to Streamlit secrets."
+def process_with_gemini(text: str, operation: str, question: str = None) -> str:
+    """Process document using Google Gemini API."""
+    if not GEMINI_API_KEY:
+        return f"[Mock AI – Valid Gemini API key not found]\n\nYour document starts with: {text[:400]}...\n\nTo enable real AI, add your Gemini API key (from Google AI Studio) to Streamlit secrets."
     
-    prompts = {
-        "summarize": "Please summarize the following document in a few concise paragraphs:\n\n",
-        "extract_key_info": "Extract the most important information from this document (key facts, dates, names, decisions):\n\n",
-        "answer_question": f"Answer the question based on the document.\n\nDocument:\n{text}\n\nQuestion: {question}"
-    }
-    prompt = prompts.get(operation, "Please process this document:\n\n") + (text if operation != "answer_question" else "")
     try:
-        response = anthropic_client.messages.create(
-            model="claude-3-haiku-20240307",
-            max_tokens=1024,
-            messages=[{"role": "user", "content": prompt}]
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        
+        if operation == "summarize":
+            prompt = f"Please summarize the following document in a few concise paragraphs:\n\n{text}"
+        elif operation == "extract":
+            prompt = f"Extract the most important information from this document (key facts, dates, names, decisions):\n\n{text}"
+        elif operation == "answer_question":
+            if not question:
+                return "Please enter a question."
+            prompt = f"Answer the question based on the document.\n\nDocument:\n{text}\n\nQuestion: {question}"
+        else:
+            return "Invalid operation selected."
+        
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",  # free tier model
+            contents=prompt
         )
-        return response.content[0].text
-    except anthropic.AuthenticationError as e:
-        return f"[Mock AI – Authentication failed: {str(e)}]\n\nYour document starts with: {text[:400]}...\n\nPlease check that your API key is correct and active."
+        return response.text
     except Exception as e:
-        return f"[Mock AI – API error: {str(e)}]\n\nYour document starts with: {text[:400]}...\n\nPlease check your API key."
+        return f"Gemini API error: {str(e)}"
 
 def save_to_supabase(user_id: str, filename: str, original_text: str, processed_summary: str, extracted_info: str):
+    if supabase_client is None:
+        st.warning("Supabase not configured. Document not saved.")
+        return False
     try:
         data = {
             "user_id": user_id,
@@ -276,6 +278,9 @@ def save_to_supabase(user_id: str, filename: str, original_text: str, processed_
         return False
 
 def create_stripe_checkout():
+    if STRIPE_SECRET_KEY == "sk_test_...":
+        st.warning("Stripe not configured.")
+        return None
     try:
         session = stripe.checkout.Session.create(
             payment_method_types=["card"],
@@ -383,18 +388,18 @@ if uploaded_file is not None and st.button(texts["process_btn"], type="primary")
         else:
             with st.spinner(texts["sending_ai"]):
                 if operation == texts["summarize"]:
-                    result = process_with_anthropic(text, "summarize")
+                    result = process_with_gemini(text, "summarize")
                     summary = result
                     extracted_info = ""
                 elif operation == texts["extract"]:
-                    result = process_with_anthropic(text, "extract_key_info")
+                    result = process_with_gemini(text, "extract")
                     summary = ""
                     extracted_info = result
                 else:
                     if not question:
                         st.warning("Please enter a question.")
                         st.stop()
-                    result = process_with_anthropic(text, "answer_question", question=question)
+                    result = process_with_gemini(text, "answer_question", question=question)
                     summary = ""
                     extracted_info = result
                 st.success(texts["success"])
@@ -411,18 +416,21 @@ if uploaded_file is not None and st.button(texts["process_btn"], type="primary")
                     st.error(texts["save_error"])
 
 if st.button(texts["view_docs_btn"]):
-    try:
-        response = supabase_client.table("documents").select("*").eq("user_id", st.session_state.user_id).order("created_at", desc=True).execute()
-        docs = response.data
-        if docs:
-            for doc in docs[:5]:
-                with st.expander(f"{doc['filename']} - {doc['created_at'][:10]}"):
-                    st.write(f"**Summary:** {doc['summary'][:300] if doc['summary'] else 'N/A'}")
-                    st.write(f"**Extracted Info:** {doc['extracted_info'][:300] if doc['extracted_info'] else 'N/A'}")
-        else:
-            st.info(texts["no_docs"])
-    except Exception as e:
-        st.error(f"Could not fetch documents: {e}")
+    if supabase_client is None:
+        st.info("Supabase not configured. Cannot fetch documents.")
+    else:
+        try:
+            response = supabase_client.table("documents").select("*").eq("user_id", st.session_state.user_id).order("created_at", desc=True).execute()
+            docs = response.data
+            if docs:
+                for doc in docs[:5]:
+                    with st.expander(f"{doc['filename']} - {doc['created_at'][:10]}"):
+                        st.write(f"**Summary:** {doc['summary'][:300] if doc['summary'] else 'N/A'}")
+                        st.write(f"**Extracted Info:** {doc['extracted_info'][:300] if doc['extracted_info'] else 'N/A'}")
+            else:
+                st.info(texts["no_docs"])
+        except Exception as e:
+            st.error(f"Could not fetch documents: {e}")
 
 st.markdown("---")
 st.caption(texts["footer"])
