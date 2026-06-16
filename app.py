@@ -16,10 +16,9 @@ st.set_page_config(
     layout="wide"
 )
 
-# ========== DIAGNOSTIC – SHOW AVAILABLE MODELS ==========
+# ========== DIAGNOSTIC – REMOVE AFTER TESTING ==========
 key = st.secrets.get("ANTHROPIC_API_KEY", "")
 st.write("Gemini key exists:", bool(key))
-st.write("Key prefix (first 15 chars):", key[:15] if key else "None")
 if key:
     genai.configure(api_key=key)
     try:
@@ -31,10 +30,10 @@ if key:
                 model_name = m.name.split('/')[-1]
                 available.append(model_name)
                 st.write(f"  - {model_name}")
-        if not available:
-            st.error("No models with generateContent found. Check your API key and enable Generative Language API.")
+        if available:
+            st.success(f"Found {len(available)} models. Will use: {available[0]}")
         else:
-            st.success(f"Found {len(available)} models. Will use: {available[0] if available else 'none'}")
+            st.error("No models with generateContent found. Please enable Generative Language API (you just did, wait a minute).")
     except Exception as e:
         st.error(f"Error listing models: {e}")
 st.markdown("---")
@@ -213,7 +212,7 @@ SUPABASE_KEY = st.secrets.get("SUPABASE_KEY", "your-anon-key")
 STRIPE_SECRET_KEY = st.secrets.get("STRIPE_SECRET_KEY", "sk_test_...")
 STRIPE_PUBLISHABLE_KEY = st.secrets.get("STRIPE_PUBLISHABLE_KEY", "pk_test_...")
 
-# Configure Gemini (already done in diagnostic, but re-configure just in case)
+# Configure Gemini
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
 
@@ -264,14 +263,13 @@ def get_available_model():
     return None
 
 def process_with_gemini(text: str, operation: str, question: str = None) -> str:
-    """Process document using Google Gemini API with automatic model selection."""
+    """Process document using Google Gemini API."""
     if not GEMINI_API_KEY:
         return f"[Mock AI – Valid Gemini API key not found]\n\nYour document starts with: {text[:400]}...\n\nTo enable real AI, add your Gemini API key (from Google AI Studio) to Streamlit secrets."
     
-    # Find the best model
     model_name = get_available_model()
     if not model_name:
-        return "No Gemini model available. Please check your API key and enable Generative Language API in Google Cloud Console."
+        return "No Gemini model available. Please enable Generative Language API (you just did – wait a minute and redeploy)."
     
     try:
         model = genai.GenerativeModel(model_name)
