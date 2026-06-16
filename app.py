@@ -5,6 +5,7 @@ import PyPDF2
 import docx
 import tempfile
 import os
+import re
 from datetime import datetime
 from gtts import gTTS
 import google.generativeai as genai
@@ -108,7 +109,8 @@ TEXTS = {
         "no_docs": "No documents found.",
         "footer": "© 2026 Document Processor AI – Built with Streamlit, Google Gemini, Supabase, and Stripe",
         "explain_btn": "🎙️ AI Voice Explanation (Female)",
-        "explain_text": "Hello, I am the AI assistant of Document Processor AI. This software allows you to upload documents (PDF, DOCX, TXT), then uses Google Gemini AI to summarize, extract key information, or answer questions based on the content. Results are stored in Supabase cloud database. You can also upgrade to premium features using Stripe. This tool was built by Gesner Deslandes, Engineer‑in‑Chief at GlobalInternet.py. Enjoy!"
+        "explain_text": "Hello, I am the AI assistant of Document Processor AI. This software allows you to upload documents (PDF, DOCX, TXT), then uses Google Gemini AI to summarize, extract key information, or answer questions based on the content. Results are stored in Supabase cloud database. You can also upgrade to premium features using Stripe. This tool was built by Gesner Deslandes, Engineer‑in‑Chief at GlobalInternet.py. Enjoy!",
+        "read_aloud_btn": "🔊 Read Result Aloud"
     },
     "French": {
         "welcome": "🔐 Bienvenue dans Document Processor AI",
@@ -146,7 +148,8 @@ TEXTS = {
         "no_docs": "Aucun document trouvé.",
         "footer": "© 2026 Document Processor AI – Construit avec Streamlit, Google Gemini, Supabase et Stripe",
         "explain_btn": "🎙️ Explication vocale IA (femme)",
-        "explain_text": "Bonjour, je suis l'assistant IA de Document Processor AI. Ce logiciel vous permet de télécharger des documents (PDF, DOCX, TXT), puis utilise l'IA Google Gemini pour résumer, extraire des informations clés ou répondre à des questions basées sur le contenu. Les résultats sont stockés dans la base de données cloud Supabase. Vous pouvez également passer à la version premium avec Stripe. Cet outil a été créé par Gesner Deslandes, ingénieur en chef chez GlobalInternet.py. Profitez-en !"
+        "explain_text": "Bonjour, je suis l'assistant IA de Document Processor AI. Ce logiciel vous permet de télécharger des documents (PDF, DOCX, TXT), puis utilise l'IA Google Gemini pour résumer, extraire des informations clés ou répondre à des questions basées sur le contenu. Les résultats sont stockés dans la base de données cloud Supabase. Vous pouvez également passer à la version premium avec Stripe. Cet outil a été créé par Gesner Deslandes, ingénieur en chef chez GlobalInternet.py. Profitez-en !",
+        "read_aloud_btn": "🔊 Lire le résultat à haute voix"
     },
     "Spanish": {
         "welcome": "🔐 Bienvenido a Document Processor AI",
@@ -184,19 +187,23 @@ TEXTS = {
         "no_docs": "No se encontraron documentos.",
         "footer": "© 2026 Document Processor AI – Construido con Streamlit, Google Gemini, Supabase y Stripe",
         "explain_btn": "🎙️ Explicación por voz IA (mujer)",
-        "explain_text": "Hola, soy el asistente IA de Document Processor AI. Este software le permite subir documentos (PDF, DOCX, TXT) y luego usa IA Google Gemini para resumir, extraer información clave o responder preguntas basadas en el contenido. Los resultados se almacenan en la base de datos en la nube Supabase. También puede actualizar a funciones premium usando Stripe. Esta herramienta fue construida por Gesner Deslandes, ingeniero jefe de GlobalInternet.py. ¡Disfrútela!"
+        "explain_text": "Hola, soy el asistente IA de Document Processor AI. Este software le permite subir documentos (PDF, DOCX, TXT) y luego usa IA Google Gemini para resumir, extraer información clave o responder preguntas basadas en el contenido. Los resultados se almacenan en la base de datos en la nube Supabase. También puede actualizar a funciones premium usando Stripe. Esta herramienta fue construida por Gesner Deslandes, ingeniero jefe de GlobalInternet.py. ¡Disfrútela!",
+        "read_aloud_btn": "🔊 Leer resultado en voz alta"
     }
 }
 
-# ========== VOICE GENERATION (only for sidebar explanation) ==========
+# ========== VOICE GENERATION ==========
 def generate_audio(text, lang):
     lang_map = {"English": "en", "French": "fr", "Spanish": "es"}
     lang_code = lang_map.get(lang, "en")
-    # Clean and shorten
-    import re
-    clean_text = re.sub(r'[^\x00-\x7F]+', '', text)[:1500]
+    
+    # Strip markdown syntax and remove non-ASCII characters up to safe limit
+    cleaned = re.sub(r'[*_#`\-]+', ' ', text)
+    clean_text = re.sub(r'[^\x00-\x7F]+', '', cleaned)[:1800]
+    
     if not clean_text.strip():
         return None
+        
     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp:
         tmp_path = tmp.name
     try:
@@ -238,6 +245,11 @@ if "payment_success" not in st.session_state:
     st.session_state.payment_success = False
 if "lang" not in st.session_state:
     st.session_state.lang = "English"
+# Preserve last results to avoid clearing on audio re-renders
+if "last_text_preview" not in st.session_state:
+    st.session_state.last_text_preview = None
+if "last_ai_result" not in st.session_state:
+    st.session_state.last_ai_result = None
 
 # ========== HELPER FUNCTIONS ==========
 def extract_text_from_file(uploaded_file):
@@ -323,8 +335,7 @@ def create_stripe_checkout():
                     "currency": "usd",
                     "product_data": {"name": "Premium Document Processing"},
                     "unit_amount": 999,
-                },
-                "quantity": 1,
+                : 1,
             }],
             mode="payment",
             success_url=st.secrets.get("APP_URL", "http://localhost:8501") + "?payment=success",
@@ -368,6 +379,8 @@ with st.sidebar:
         st.markdown(f"**User:** {st.session_state.user_id}")
         if st.button(texts["logout"], use_container_width=True):
             st.session_state.user_id = None
+            st.session_state.last_text_preview = None
+            st.session_state.last_ai_result = None
             st.rerun()
         st.markdown("---")
         if st.button(texts["premium_btn"], use_container_width=True):
@@ -439,18 +452,34 @@ if uploaded_file is not None and st.button(texts["process_btn"], type="primary")
                     result = process_with_gemini(text, "answer_question", question=question)
                     summary = ""
                     extracted_info = result
+                
+                st.session_state.last_text_preview = text[:1000]
+                st.session_state.last_ai_result = result
                 st.success(texts["success"])
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.subheader(texts["preview_title"])
-                    st.text_area("", text[:1000], height=200)
-                with col2:
-                    st.subheader(texts["ai_result_title"])
-                    st.markdown(result)
+                
                 if save_to_supabase(st.session_state.user_id, uploaded_file.name, text[:5000], summary, extracted_info):
                     st.success(texts["save_success"])
                 else:
                     st.error(texts["save_error"])
+
+# Render Processing Results Panel if present in the session state
+if st.session_state.last_ai_result is not None:
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader(texts["preview_title"])
+        st.text_area("", st.session_state.last_text_preview, height=250)
+    with col2:
+        st.subheader(texts["ai_result_title"])
+        st.markdown(st.session_state.last_ai_result)
+        
+        # Multilingual TTS action button adjacent to the generated data
+        if st.button(texts["read_aloud_btn"]):
+            with st.spinner("Processing voice output..."):
+                audio_data = generate_audio(st.session_state.last_ai_result, st.session_state.lang)
+                if audio_data:
+                    st.audio(audio_data, format="audio/mp3")
+                else:
+                    st.error("Could not translate result to readable text.")
 
 if st.button(texts["view_docs_btn"]):
     if supabase_client is None:
