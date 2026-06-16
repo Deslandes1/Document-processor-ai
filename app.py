@@ -5,6 +5,7 @@ import PyPDF2
 import docx
 import tempfile
 import os
+import re
 from datetime import datetime
 from gtts import gTTS
 import google.generativeai as genai
@@ -191,29 +192,31 @@ TEXTS = {
     }
 }
 
-# ========== VOICE GENERATION WITH gTTS ==========
+# ========== ROBUST VOICE GENERATION WITH gTTS ==========
 def generate_audio(text, lang):
-    lang_map = {
-        "English": "en",
-        "French": "fr",
-        "Spanish": "es"
-    }
+    """Generate speech from text, clean non‑ASCII, limit length, handle errors."""
+    lang_map = {"English": "en", "French": "fr", "Spanish": "es"}
     lang_code = lang_map.get(lang, "en")
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp:
-        tmp_path = tmp.name
+    # Remove non‑ASCII characters (gTTS fails on some Unicode)
+    clean_text = re.sub(r'[^\x00-\x7F]+', '', text)
+    # Limit to 1500 characters to avoid timeouts
+    clean_text = clean_text[:1500] if len(clean_text) > 1500 else clean_text
+    if not clean_text.strip():
+        return None
+    tmp_path = None
     try:
-        # Limit text to 2000 chars to avoid timeouts
-        text = text[:2000] if len(text) > 2000 else text
-        tts = gTTS(text=text, lang=lang_code, slow=False)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp:
+            tmp_path = tmp.name
+        tts = gTTS(text=clean_text, lang=lang_code, slow=False)
         tts.save(tmp_path)
         with open(tmp_path, "rb") as f:
             audio_bytes = f.read()
         return audio_bytes
     except Exception as e:
-        st.error(f"gTTS error: {e}")
+        st.error(f"Voice generation error: {e}")
         return None
     finally:
-        if os.path.exists(tmp_path):
+        if tmp_path and os.path.exists(tmp_path):
             os.unlink(tmp_path)
 
 # ========== CONFIGURATION (from secrets) ==========
@@ -398,7 +401,7 @@ with st.sidebar:
                 st.audio(audio_bytes, format="audio/mp3")
                 st.success("Explanation played. Click again to repeat.")
             else:
-                st.error("Failed to generate explanation audio.")
+                st.error("Could not generate explanation audio.")
 
 # ========== MAIN CONTENT ==========
 col_title, col_pic = st.columns([4, 1])
@@ -462,7 +465,7 @@ if uploaded_file is not None and st.button(texts["process_btn"], type="primary")
                             if audio_bytes:
                                 st.audio(audio_bytes, format="audio/mp3")
                             else:
-                                st.error("Failed to generate speech. The result might be too long or contain unsupported characters.")
+                                st.error("Could not generate speech. The result may be too long or contain unsupported characters.")
                 if save_to_supabase(st.session_state.user_id, uploaded_file.name, text[:5000], summary, extracted_info):
                     st.success(texts["save_success"])
                 else:
