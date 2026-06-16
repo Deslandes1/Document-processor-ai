@@ -5,7 +5,6 @@ import PyPDF2
 import docx
 import tempfile
 import os
-import re
 from datetime import datetime
 from gtts import gTTS
 import google.generativeai as genai
@@ -34,7 +33,7 @@ if key:
         if available:
             st.success(f"Found {len(available)} models. Will use: {available[0]}")
         else:
-            st.error("No models with generateContent found. Please enable Generative Language API (you just did, wait a minute).")
+            st.error("No models with generateContent found.")
     except Exception as e:
         st.error(f"Error listing models: {e}")
 st.markdown("---")
@@ -103,7 +102,6 @@ TEXTS = {
         "success": "Processing complete!",
         "preview_title": "Document Preview",
         "ai_result_title": "AI Result",
-        "read_result_btn": "🔊 Read Result Aloud",
         "save_success": "Document saved to cloud (Supabase).",
         "save_error": "Failed to save to Supabase. Check your credentials.",
         "view_docs_btn": "📂 View My Processed Documents",
@@ -142,7 +140,6 @@ TEXTS = {
         "success": "Traitement terminé !",
         "preview_title": "Aperçu du document",
         "ai_result_title": "Résultat IA",
-        "read_result_btn": "🔊 Lire le résultat à voix haute",
         "save_success": "Document enregistré dans le cloud (Supabase).",
         "save_error": "Échec de l'enregistrement dans Supabase. Vérifiez vos identifiants.",
         "view_docs_btn": "📂 Voir mes documents traités",
@@ -181,7 +178,6 @@ TEXTS = {
         "success": "¡Procesamiento completo!",
         "preview_title": "Vista previa del documento",
         "ai_result_title": "Resultado IA",
-        "read_result_btn": "🔊 Leer resultado en voz alta",
         "save_success": "Documento guardado en la nube (Supabase).",
         "save_error": "Error al guardar en Supabase. Verifique sus credenciales.",
         "view_docs_btn": "📂 Ver mis documentos procesados",
@@ -192,31 +188,28 @@ TEXTS = {
     }
 }
 
-# ========== ROBUST VOICE GENERATION WITH gTTS ==========
+# ========== VOICE GENERATION (only for sidebar explanation) ==========
 def generate_audio(text, lang):
-    """Generate speech from text, clean non‑ASCII, limit length, handle errors."""
     lang_map = {"English": "en", "French": "fr", "Spanish": "es"}
     lang_code = lang_map.get(lang, "en")
-    # Remove non‑ASCII characters (gTTS fails on some Unicode)
-    clean_text = re.sub(r'[^\x00-\x7F]+', '', text)
-    # Limit to 1500 characters to avoid timeouts
-    clean_text = clean_text[:1500] if len(clean_text) > 1500 else clean_text
+    # Clean and shorten
+    import re
+    clean_text = re.sub(r'[^\x00-\x7F]+', '', text)[:1500]
     if not clean_text.strip():
         return None
-    tmp_path = None
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp:
+        tmp_path = tmp.name
     try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp:
-            tmp_path = tmp.name
         tts = gTTS(text=clean_text, lang=lang_code, slow=False)
         tts.save(tmp_path)
         with open(tmp_path, "rb") as f:
             audio_bytes = f.read()
         return audio_bytes
     except Exception as e:
-        st.error(f"Voice generation error: {e}")
+        st.error(f"Voice error: {e}")
         return None
     finally:
-        if tmp_path and os.path.exists(tmp_path):
+        if os.path.exists(tmp_path):
             os.unlink(tmp_path)
 
 # ========== CONFIGURATION (from secrets) ==========
@@ -226,11 +219,9 @@ SUPABASE_KEY = st.secrets.get("SUPABASE_KEY", "your-anon-key")
 STRIPE_SECRET_KEY = st.secrets.get("STRIPE_SECRET_KEY", "sk_test_...")
 STRIPE_PUBLISHABLE_KEY = st.secrets.get("STRIPE_PUBLISHABLE_KEY", "pk_test_...")
 
-# Configure Gemini
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
 
-# Initialize Supabase and Stripe if configured
 if SUPABASE_URL != "https://your-project.supabase.co":
     supabase_client = supabase.create_client(SUPABASE_URL, SUPABASE_KEY)
 else:
@@ -266,7 +257,6 @@ def extract_text_from_file(uploaded_file):
         return ""
 
 def get_available_model():
-    """Return the first available model that supports generateContent."""
     try:
         models = genai.list_models()
         for m in models:
@@ -277,13 +267,12 @@ def get_available_model():
     return None
 
 def process_with_gemini(text: str, operation: str, question: str = None) -> str:
-    """Process document using Google Gemini API."""
     if not GEMINI_API_KEY:
-        return f"[Mock AI – Valid Gemini API key not found]\n\nYour document starts with: {text[:400]}...\n\nTo enable real AI, add your Gemini API key (from Google AI Studio) to Streamlit secrets."
+        return f"[Mock AI – Valid Gemini API key not found]\n\nYour document starts with: {text[:400]}..."
     
     model_name = get_available_model()
     if not model_name:
-        return "No Gemini model available. Please enable Generative Language API (you just did – wait a minute and redeploy)."
+        return "No Gemini model available. Please enable Generative Language API."
     
     try:
         model = genai.GenerativeModel(model_name)
@@ -458,14 +447,6 @@ if uploaded_file is not None and st.button(texts["process_btn"], type="primary")
                 with col2:
                     st.subheader(texts["ai_result_title"])
                     st.markdown(result)
-                    # READ RESULT BUTTON (fixed)
-                    if st.button(texts["read_result_btn"], key="read_result"):
-                        with st.spinner("Generating speech..."):
-                            audio_bytes = generate_audio(result, st.session_state.lang)
-                            if audio_bytes:
-                                st.audio(audio_bytes, format="audio/mp3")
-                            else:
-                                st.error("Could not generate speech. The result may be too long or contain unsupported characters.")
                 if save_to_supabase(st.session_state.user_id, uploaded_file.name, text[:5000], summary, extracted_info):
                     st.success(texts["save_success"])
                 else:
