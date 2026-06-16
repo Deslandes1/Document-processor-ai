@@ -16,10 +16,27 @@ st.set_page_config(
     layout="wide"
 )
 
-# ========== DIAGNOSTIC – REMOVE AFTER TESTING ==========
+# ========== DIAGNOSTIC – SHOW AVAILABLE MODELS ==========
 key = st.secrets.get("ANTHROPIC_API_KEY", "")
 st.write("Gemini key exists:", bool(key))
 st.write("Key prefix (first 15 chars):", key[:15] if key else "None")
+if key:
+    genai.configure(api_key=key)
+    try:
+        models = genai.list_models()
+        st.write("Available models (generateContent):")
+        available = []
+        for m in models:
+            if 'generateContent' in m.supported_generation_methods:
+                model_name = m.name.split('/')[-1]
+                available.append(model_name)
+                st.write(f"  - {model_name}")
+        if not available:
+            st.error("No models with generateContent found. Check your API key and enable Generative Language API.")
+        else:
+            st.success(f"Found {len(available)} models. Will use: {available[0] if available else 'none'}")
+    except Exception as e:
+        st.error(f"Error listing models: {e}")
 st.markdown("---")
 
 # ========== LIGHT BLUE THEME CSS ==========
@@ -190,13 +207,13 @@ def generate_audio(text, lang):
     return audio_bytes
 
 # ========== CONFIGURATION (from secrets) ==========
-GEMINI_API_KEY = st.secrets.get("ANTHROPIC_API_KEY", "")  # reuse the same secret name
+GEMINI_API_KEY = st.secrets.get("ANTHROPIC_API_KEY", "")
 SUPABASE_URL = st.secrets.get("SUPABASE_URL", "https://your-project.supabase.co")
 SUPABASE_KEY = st.secrets.get("SUPABASE_KEY", "your-anon-key")
 STRIPE_SECRET_KEY = st.secrets.get("STRIPE_SECRET_KEY", "sk_test_...")
 STRIPE_PUBLISHABLE_KEY = st.secrets.get("STRIPE_PUBLISHABLE_KEY", "pk_test_...")
 
-# Configure Gemini
+# Configure Gemini (already done in diagnostic, but re-configure just in case)
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
 
@@ -235,15 +252,29 @@ def extract_text_from_file(uploaded_file):
     else:
         return ""
 
+def get_available_model():
+    """Return the first available model that supports generateContent."""
+    try:
+        models = genai.list_models()
+        for m in models:
+            if 'generateContent' in m.supported_generation_methods:
+                return m.name.split('/')[-1]
+    except:
+        pass
+    return None
+
 def process_with_gemini(text: str, operation: str, question: str = None) -> str:
-    """Process document using Google Gemini API."""
+    """Process document using Google Gemini API with automatic model selection."""
     if not GEMINI_API_KEY:
         return f"[Mock AI – Valid Gemini API key not found]\n\nYour document starts with: {text[:400]}...\n\nTo enable real AI, add your Gemini API key (from Google AI Studio) to Streamlit secrets."
     
+    # Find the best model
+    model_name = get_available_model()
+    if not model_name:
+        return "No Gemini model available. Please check your API key and enable Generative Language API in Google Cloud Console."
+    
     try:
-        # Use a free, stable model (gemini-2.0-flash-exp)
-        model = genai.GenerativeModel('gemini-2.0-flash-exp')
-        
+        model = genai.GenerativeModel(model_name)
         if operation == "summarize":
             prompt = f"Please summarize the following document in a few concise paragraphs:\n\n{text}"
         elif operation == "extract":
