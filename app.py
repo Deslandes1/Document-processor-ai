@@ -7,7 +7,7 @@ import tempfile
 import os
 from datetime import datetime
 from gtts import gTTS
-from google import genai
+import google.generativeai as genai
 
 # ========== PAGE CONFIG (MUST BE FIRST) ==========
 st.set_page_config(
@@ -196,6 +196,10 @@ SUPABASE_KEY = st.secrets.get("SUPABASE_KEY", "your-anon-key")
 STRIPE_SECRET_KEY = st.secrets.get("STRIPE_SECRET_KEY", "sk_test_...")
 STRIPE_PUBLISHABLE_KEY = st.secrets.get("STRIPE_PUBLISHABLE_KEY", "pk_test_...")
 
+# Configure Gemini
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+
 # Initialize Supabase and Stripe if configured
 if SUPABASE_URL != "https://your-project.supabase.co":
     supabase_client = supabase.create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -237,8 +241,7 @@ def process_with_gemini(text: str, operation: str, question: str = None) -> str:
         return f"[Mock AI – Valid Gemini API key not found]\n\nYour document starts with: {text[:400]}...\n\nTo enable real AI, add your Gemini API key (from Google AI Studio) to Streamlit secrets."
     
     try:
-        client = genai.Client(api_key=GEMINI_API_KEY)
-        
+        model = genai.GenerativeModel('gemini-1.5-flash')  # free tier model
         if operation == "summarize":
             prompt = f"Please summarize the following document in a few concise paragraphs:\n\n{text}"
         elif operation == "extract":
@@ -250,10 +253,7 @@ def process_with_gemini(text: str, operation: str, question: str = None) -> str:
         else:
             return "Invalid operation selected."
         
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",  # free tier model
-            contents=prompt
-        )
+        response = model.generate_content(prompt)
         return response.text
     except Exception as e:
         return f"Gemini API error: {str(e)}"
