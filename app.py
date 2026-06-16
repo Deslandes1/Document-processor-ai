@@ -241,7 +241,9 @@ def process_with_gemini(text: str, operation: str, question: str = None) -> str:
         return f"[Mock AI – Valid Gemini API key not found]\n\nYour document starts with: {text[:400]}...\n\nTo enable real AI, add your Gemini API key (from Google AI Studio) to Streamlit secrets."
     
     try:
-        model = genai.GenerativeModel('gemini-1.5-flash')  # free tier model
+        # Use a free, stable model (gemini-2.0-flash-exp)
+        model = genai.GenerativeModel('gemini-2.0-flash-exp')
+        
         if operation == "summarize":
             prompt = f"Please summarize the following document in a few concise paragraphs:\n\n{text}"
         elif operation == "extract":
