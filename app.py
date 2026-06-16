@@ -201,12 +201,20 @@ def generate_audio(text, lang):
     lang_code = lang_map.get(lang, "en")
     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp:
         tmp_path = tmp.name
-    tts = gTTS(text=text, lang=lang_code, slow=False)
-    tts.save(tmp_path)
-    with open(tmp_path, "rb") as f:
-        audio_bytes = f.read()
-    os.unlink(tmp_path)
-    return audio_bytes
+    try:
+        # Limit text to 2000 chars to avoid timeouts
+        text = text[:2000] if len(text) > 2000 else text
+        tts = gTTS(text=text, lang=lang_code, slow=False)
+        tts.save(tmp_path)
+        with open(tmp_path, "rb") as f:
+            audio_bytes = f.read()
+        return audio_bytes
+    except Exception as e:
+        st.error(f"gTTS error: {e}")
+        return None
+    finally:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
 
 # ========== CONFIGURATION (from secrets) ==========
 GEMINI_API_KEY = st.secrets.get("ANTHROPIC_API_KEY", "")
@@ -386,8 +394,11 @@ with st.sidebar:
     if st.button(texts["explain_btn"], use_container_width=True):
         with st.spinner("Generating voice explanation..."):
             audio_bytes = generate_audio(texts["explain_text"], st.session_state.lang)
-            st.audio(audio_bytes, format="audio/mp3")
-            st.success("Explanation played. Click again to repeat.")
+            if audio_bytes:
+                st.audio(audio_bytes, format="audio/mp3")
+                st.success("Explanation played. Click again to repeat.")
+            else:
+                st.error("Failed to generate explanation audio.")
 
 # ========== MAIN CONTENT ==========
 col_title, col_pic = st.columns([4, 1])
@@ -444,11 +455,14 @@ if uploaded_file is not None and st.button(texts["process_btn"], type="primary")
                 with col2:
                     st.subheader(texts["ai_result_title"])
                     st.markdown(result)
-                    # New button to read the result aloud
+                    # READ RESULT BUTTON (fixed)
                     if st.button(texts["read_result_btn"], key="read_result"):
                         with st.spinner("Generating speech..."):
                             audio_bytes = generate_audio(result, st.session_state.lang)
-                            st.audio(audio_bytes, format="audio/mp3")
+                            if audio_bytes:
+                                st.audio(audio_bytes, format="audio/mp3")
+                            else:
+                                st.error("Failed to generate speech. The result might be too long or contain unsupported characters.")
                 if save_to_supabase(st.session_state.user_id, uploaded_file.name, text[:5000], summary, extracted_info):
                     st.success(texts["save_success"])
                 else:
